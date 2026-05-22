@@ -1,4 +1,5 @@
-Minimalist Notes App
+#Minimalist Notes App
+
 A lightweight, production-ready Flutter notes application designed with a clean Material 3 interface and reliable offline data persistence.
 
 🚀 Features
@@ -33,6 +34,7 @@ flutter pub get
 flutter run
 
 🛠️ Tech Stack & Packages
+
 Framework: Flutter (Dart)
 
 Local Database: sqflite (SQLite plugin for Flutter)
