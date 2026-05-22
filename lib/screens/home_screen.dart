@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'db_helper.dart';
-import 'main.dart';
+import '../database/db_helper.dart';
+import '../main.dart';
 import 'editor_screen.dart';
 
 class HomeScreen extends StatefulWidget {

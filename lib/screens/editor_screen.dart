@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'db_helper.dart';
-import 'main.dart';
+import '../database/db_helper.dart';
+import '../main.dart';
 
 class EditorScreen extends StatefulWidget {
   final Note? note;
