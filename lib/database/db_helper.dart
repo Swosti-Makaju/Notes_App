@@ -8,6 +8,7 @@ class Note {
   final String updatedAt;
   final bool isPinned;
   final String folder;
+  final int colorIndex; // NEW: 0 = default, 1-7 = color options
 
   Note({
     this.id,
@@ -16,6 +17,7 @@ class Note {
     required this.updatedAt,
     this.isPinned = false,
     this.folder = '',
+    this.colorIndex = 0,
   });
 
   Map<String, dynamic> toMap() {
@@ -26,6 +28,7 @@ class Note {
       'updated_at': updatedAt,
       'is_pinned': isPinned ? 1 : 0,
       'folder': folder,
+      'color_index': colorIndex,
     };
   }
 
@@ -37,6 +40,7 @@ class Note {
       updatedAt: map['updated_at'],
       isPinned: (map['is_pinned'] ?? 0) == 1,
       folder: map['folder'] ?? '',
+      colorIndex: map['color_index'] ?? 0,
     );
   }
 }
@@ -56,7 +60,7 @@ class DBHelper {
 
     return openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE notes (
@@ -65,7 +69,8 @@ class DBHelper {
             content TEXT NOT NULL,
             updated_at TEXT NOT NULL,
             is_pinned INTEGER NOT NULL DEFAULT 0,
-            folder TEXT NOT NULL DEFAULT ''
+            folder TEXT NOT NULL DEFAULT '',
+            color_index INTEGER NOT NULL DEFAULT 0
           )
         ''');
         await db.execute('''
@@ -77,12 +82,8 @@ class DBHelper {
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
-          try {
-            await db.execute("ALTER TABLE notes ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0");
-          } catch (_) {}
-          try {
-            await db.execute("ALTER TABLE notes ADD COLUMN folder TEXT NOT NULL DEFAULT ''");
-          } catch (_) {}
+          try { await db.execute("ALTER TABLE notes ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0"); } catch (_) {}
+          try { await db.execute("ALTER TABLE notes ADD COLUMN folder TEXT NOT NULL DEFAULT ''"); } catch (_) {}
           try {
             await db.execute('''
               CREATE TABLE IF NOT EXISTS folders (
@@ -91,6 +92,9 @@ class DBHelper {
               )
             ''');
           } catch (_) {}
+        }
+        if (oldVersion < 3) {
+          try { await db.execute("ALTER TABLE notes ADD COLUMN color_index INTEGER NOT NULL DEFAULT 0"); } catch (_) {}
         }
       },
     );

@@ -3,6 +3,35 @@ import '../database/db_helper.dart';
 import '../main.dart';
 import 'editor_screen.dart';
 
+// Shared note color palette
+const List<Color> kNoteColors = [
+  Color(0xFFFFFFFF), // 0 = default (white / surface)
+  Color(0xFFFFCDD2), // 1 = red
+  Color(0xFFFFE0B2), // 2 = orange
+  Color(0xFFFFF9C4), // 3 = yellow
+  Color(0xFFC8E6C9), // 4 = green
+  Color(0xFFBBDEFB), // 5 = blue
+  Color(0xFFE1BEE7), // 6 = purple
+  Color(0xFFD7CCC8), // 7 = brown
+];
+
+const List<Color> kNoteColorsDark = [
+  Color(0xFF2C2C2C),
+  Color(0xFF6D2E2E),
+  Color(0xFF6D4A2E),
+  Color(0xFF6D6430),
+  Color(0xFF2E5E30),
+  Color(0xFF2E4A6D),
+  Color(0xFF4A2E6D),
+  Color(0xFF4A3E38),
+];
+
+Color noteCardColor(int colorIndex, bool isDark) {
+  final palette = isDark ? kNoteColorsDark : kNoteColors;
+  if (colorIndex < 0 || colorIndex >= palette.length) return palette[0];
+  return palette[colorIndex];
+}
+
 class HomeScreen extends StatefulWidget {
   final String? selectedFolder;
   final ValueChanged<String?>? onFolderChanged;
@@ -18,6 +47,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Note> _filtered = [];
   List<String> _folders = [];
   final _searchController = TextEditingController();
+  bool _isGridView = false; // NEW: grid/list toggle
 
   @override
   void initState() {
@@ -197,7 +227,6 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Header
             Container(
               padding: const EdgeInsets.fromLTRB(20, 24, 16, 16),
               color: Theme.of(context).appBarTheme.backgroundColor,
@@ -209,7 +238,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     fontWeight: FontWeight.bold),
               ),
             ),
-            // All Notes
             ListTile(
               leading: const Icon(Icons.notes),
               title: const Text('All Notes'),
@@ -222,7 +250,6 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             ),
             const Divider(),
-            // Folder list
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               child: Row(
@@ -288,6 +315,156 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // Note card (shared between list and grid)
+  Widget _buildNoteCard(Note note) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = noteCardColor(note.colorIndex, isDark);
+    final isDefault = note.colorIndex == 0;
+
+    return Dismissible(
+      key: ValueKey(note.id),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        decoration: BoxDecoration(
+          color: Colors.redAccent,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Icon(Icons.delete_outline, color: Colors.white, size: 28),
+      ),
+      confirmDismiss: (_) async {
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Text('Delete note?'),
+            content: const Text('This cannot be undone.'),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancel')),
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Delete',
+                      style: TextStyle(color: Colors.redAccent))),
+            ],
+          ),
+        );
+        return confirmed == true;
+      },
+      onDismissed: (_) async {
+        await DBHelper.delete(note.id!);
+        _loadNotes();
+      },
+      child: Card(
+        color: isDefault ? null : cardColor,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => _openEditor(note),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    if (note.isPinned) ...[
+                      const Icon(Icons.push_pin,
+                          size: 14, color: Colors.blueAccent),
+                      const SizedBox(width: 4),
+                    ],
+                    Expanded(
+                      child: Text(
+                        note.title,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w700, fontSize: 15),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    // pin + delete buttons
+                    SizedBox(
+                      height: 28,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          InkWell(
+                            borderRadius: BorderRadius.circular(14),
+                            onTap: () async {
+                              await DBHelper.togglePin(
+                                  note.id!, note.isPinned);
+                              _loadNotes();
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.all(2),
+                              child: Icon(
+                                note.isPinned
+                                    ? Icons.push_pin
+                                    : Icons.push_pin_outlined,
+                                size: 16,
+                                color: note.isPinned
+                                    ? Colors.blueAccent
+                                    : Colors.grey,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          InkWell(
+                            borderRadius: BorderRadius.circular(14),
+                            onTap: () => _confirmDelete(note.id!),
+                            child: const Padding(
+                              padding: EdgeInsets.all(2),
+                              child: Icon(Icons.delete_outline,
+                                  size: 16, color: Colors.redAccent),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                if (note.content.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    note.content,
+                    maxLines: _isGridView ? 4 : 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 13, color: Colors.grey.shade600),
+                  ),
+                ],
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Text(note.updatedAt,
+                        style:
+                        const TextStyle(fontSize: 10, color: Colors.grey)),
+                    if (note.folder.isNotEmpty) ...[
+                      const SizedBox(width: 6),
+                      Icon(Icons.folder_outlined,
+                          size: 10, color: Colors.grey.shade500),
+                      const SizedBox(width: 2),
+                      Expanded(
+                        child: Text(note.folder,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.grey.shade500)),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final title =
@@ -298,6 +475,12 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
         actions: [
+          // Grid / List toggle
+          IconButton(
+            icon: Icon(_isGridView ? Icons.view_list : Icons.grid_view),
+            tooltip: _isGridView ? 'List view' : 'Grid view',
+            onPressed: () => setState(() => _isGridView = !_isGridView),
+          ),
           ValueListenableBuilder<ThemeMode>(
             valueListenable: themeNotifier,
             builder: (_, mode, __) => IconButton(
@@ -361,95 +544,24 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ]),
       )
+          : _isGridView
+          ? GridView.builder(
+        padding: const EdgeInsets.all(12),
+        gridDelegate:
+        const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 8,
+          mainAxisSpacing: 8,
+          childAspectRatio: 0.85,
+        ),
+        itemCount: _filtered.length,
+        itemBuilder: (_, i) => _buildNoteCard(_filtered[i]),
+      )
           : ListView.separated(
         padding: const EdgeInsets.all(16),
         itemCount: _filtered.length,
         separatorBuilder: (_, __) => const SizedBox(height: 10),
-        itemBuilder: (_, i) {
-          final note = _filtered[i];
-          return Card(
-            child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16, vertical: 8),
-              onTap: () => _openEditor(note),
-              title: Row(
-                children: [
-                  if (note.isPinned) ...[
-                    const Icon(Icons.push_pin,
-                        size: 14, color: Colors.blueAccent),
-                    const SizedBox(width: 4),
-                  ],
-                  Expanded(
-                    child: Text(
-                      note.title,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w700, fontSize: 16),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-              subtitle: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (note.content.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      note.content,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: Colors.grey.shade600),
-                    ),
-                  ],
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Text(note.updatedAt,
-                          style: const TextStyle(
-                              fontSize: 11, color: Colors.grey)),
-                      if (note.folder.isNotEmpty) ...[
-                        const SizedBox(width: 8),
-                        Icon(Icons.folder_outlined,
-                            size: 11, color: Colors.grey.shade500),
-                        const SizedBox(width: 2),
-                        Text(note.folder,
-                            style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.grey.shade500)),
-                      ],
-                    ],
-                  ),
-                ],
-              ),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: Icon(
-                      note.isPinned
-                          ? Icons.push_pin
-                          : Icons.push_pin_outlined,
-                      color: note.isPinned
-                          ? Colors.blueAccent
-                          : Colors.grey,
-                      size: 20,
-                    ),
-                    onPressed: () async {
-                      await DBHelper.togglePin(note.id!, note.isPinned);
-                      _loadNotes();
-                    },
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline,
-                        color: Colors.red),
-                    onPressed: () => _confirmDelete(note.id!),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
+        itemBuilder: (_, i) => _buildNoteCard(_filtered[i]),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _openEditor(),
